@@ -819,8 +819,8 @@ class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
     The application can send directly and pick up incoming frames from the queue.
     """
 
-    def __init__(self, port, loglevel=ERROR):
-        super().__init__(port=port, loglevel=loglevel)
+    def __init__(self, port, baudrate=9600, loglevel=ERROR):
+        super().__init__(port=port, baudrate=baudrate, loglevel=loglevel)
         self._thread_lock = Lock()
 
     def close(self):
