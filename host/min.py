@@ -560,7 +560,7 @@ class MINTransport:
 
                 if self._rx_frame_checksum != computed_checksum:
                     min_logger.warning(
-                        "CRC mismatch (0x%08X vs 0x%08X), frame dropped",
+                        "CRC mismatch (0x%08X received vs 0x%08X computed), frame dropped",
                         self._rx_frame_checksum,
                         computed_checksum,
                     )
