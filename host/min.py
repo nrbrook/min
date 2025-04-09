@@ -883,52 +883,38 @@ class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
                          frame_retransmit_timeout_ms=frame_retransmit_timeout_ms,
                          loglevel=loglevel)
         self._thread_lock = Lock()
+        
+    def _with_lock(self, func):
+        """Execute a function with the thread lock acquired.
+        
+        Args:
+            func: Function to execute with the lock
+            
+        Returns:
+            The result of the function
+        """
+        self._thread_lock.acquire()
+        try:
+            return func()
+        finally:
+            self._thread_lock.release()
 
     def close(self):
-        self._thread_lock.acquire()
-        try:
-            super().close()
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
+        self._with_lock(super().close)
 
     def transport_stats(self):
-        self._thread_lock.acquire()
-        try:
-            result = super().transport_stats()
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-        return result
+        return self._with_lock(super().transport_stats)
+    
+    def transport_reset(self):
+        self._with_lock(super().transport_reset)
 
     def send_frame(self, min_id: int, payload: bytes):
-        self._thread_lock.acquire()
-        try:
-            super().send_frame(min_id=min_id, payload=payload)
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
+        parent_send_frame = super().send_frame
+        self._with_lock(lambda: parent_send_frame(min_id=min_id, payload=payload))
 
     def queue_frame(self, min_id: int, payload: bytes):
-        self._thread_lock.acquire()
-        try:
-            super().queue_frame(min_id=min_id, payload=payload)
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
+        parent_queue_frame = super().queue_frame
+        self._with_lock(lambda: parent_queue_frame(min_id=min_id, payload=payload))
 
     def poll(self):
-        self._thread_lock.acquire()
-        try:
-            result = super().poll()
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-        return result
+        return self._with_lock(super().poll)
