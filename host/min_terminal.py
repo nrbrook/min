@@ -71,19 +71,22 @@ def receive_frames_thread(
         sleep(0.05)  # Small delay to prevent CPU hogging
 
 
-def parse_log_level(level_name):
-    """Convert a log level name to the corresponding logging level."""
-    levels = {
+log_levels_map = {
         'debug': logging.DEBUG,
         'info': logging.INFO,
         'warning': logging.WARNING,
         'error': logging.ERROR,
         'critical': logging.CRITICAL
     }
+
+
+def parse_log_level(level_name: str) -> int:
+    """Convert a log level name to the corresponding logging level."""
+
     level_name = level_name.lower()
-    if level_name not in levels:
+    if level_name not in log_levels_map:
         raise ValueError(f"Invalid log level: {level_name}")
-    return levels[level_name]
+    return log_levels_map[level_name]
 
 
 def setup_min_handler(port, baudrate, loglevel=logging.ERROR):
@@ -116,6 +119,8 @@ def start_min_terminal(min_handler, hex_mode=False, min_id=0x00, frame_callback=
         daemon=True
     )
     receive_thread.start()
+
+    min_handler.transport_reset()
 
     try:
         while True:
@@ -189,51 +194,85 @@ def select_port(port: Optional[str] = None) -> str:
             exit(0)
 
 
-def parse_args():
-    """Parse command line arguments for MIN terminal functionality."""
-    parser = argparse.ArgumentParser(description='Interactive MIN terminal')
+def add_port_arg(parser):
     parser.add_argument(
         '--port', '-p',
         help='Serial port (e.g., /dev/tty.usbmodem1421)'
     )
-    parser.add_argument(
-        '--hex',
-        action='store_true',
-        help='Use hex input mode'
-    )
+
+
+def add_min_id_arg(parser):
     parser.add_argument(
         '--min-id',
         type=lambda x: int(x, 0),  # Allows for hex (0x01) or decimal input
         default=0x01,
         help='MIN ID to use when sending frames (default: 0x01)'
     )
+
+
+def add_baudrate_arg(parser):
     parser.add_argument(
         '--baudrate',
         type=int,
         default=9600,
         help='Baudrate for serial communication (default: 9600)'
     )
+
+
+def add_log_level_arg(parser):
     parser.add_argument(
         '--log-level',
-        type=parse_log_level,
-        default=logging.ERROR,
+        type=str,
+        default="error",
+        choices=log_levels_map.keys(),
         help='Set logging level: debug, info, warning, error, critical '
              '(default: error)'
     )
+
+
+def add_hex_arg(parser):
+    parser.add_argument(
+        '--hex',
+        action='store_true',
+        help='Use hex input mode'
+    )
+
+
+def parse_args(parser,add_port=True, add_log_level=True, add_hex=True, add_min_id=True, add_baudrate=True):
+    """Parse command line arguments for MIN terminal functionality."""
+    
+    if add_port:
+        add_port_arg(parser)
+    if add_log_level:
+        add_log_level_arg(parser)
+    if add_hex:
+        add_hex_arg(parser)
+    if add_min_id:
+        add_min_id_arg(parser)
+    if add_baudrate:
+        add_baudrate_arg(parser)
     args = parser.parse_args()
 
-    args.port = select_port(args.port)
+    if add_port:
+        args.port = select_port(args.port)
+    if add_log_level:
+        args.log_level = parse_log_level(args.log_level)
+    if not add_hex:
+        args.hex = True
+    if add_min_id:
+        # Validate MIN ID range (0-63 as per the spec)
+        if args.min_id not in range(64):
+            parser.error("MIN ID must be in range 0-63")
+    if not add_baudrate:
+        args.baudrate = 9600
 
-    # Validate MIN ID range (0-63 as per the spec)
-    if args.min_id not in range(64):
-        parser.error("MIN ID must be in range 0-63")
-        
     return args
 
 
 def main():
     """Run the MIN terminal."""
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="MIN terminal")
+    args = parse_args(parser=parser)
 
     # Set up and connect MIN handler
     min_handler = setup_min_handler(
