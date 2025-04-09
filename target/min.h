@@ -70,8 +70,31 @@
 #define TRANSPORT_PROTOCOL
 #endif
 
-#ifndef MAX_PAYLOAD
-#define MAX_PAYLOAD (255U)
+// Number of bytes needed for a frame with a given payload length, excluding stuff bytes
+// 3 header bytes, ID/control byte, length byte, seq byte, 4 byte CRC, EOF byte
+#define MIN_OVERHEAD 11
+
+#if defined(MAX_PAYLOAD)
+// for backwards compatibility
+#define MIN_MAX_PAYLOAD MAX_PAYLOAD
+#endif
+
+#ifdef MIN_MAX_PACKET_SIZE
+#if (MIN_MAX_PACKET_SIZE < MIN_OVERHEAD)
+#error "MIN_MAX_PACKET_SIZE must be greater than MIN_OVERHEAD"
+#endif
+// Subtract overhead and max potential stuff bytes
+#define MIN_MAX_PAYLOAD (2 * (MIN_MAX_PACKET_SIZE - MIN_OVERHEAD + 1) / 3)
+#else
+#ifndef MIN_MAX_PAYLOAD
+#define MIN_MAX_PAYLOAD 255
+#endif
+// Add overhead and max potential stuff bytes
+#define MIN_MAX_PACKET_SIZE (MIN_MAX_PAYLOAD + MIN_OVERHEAD + (MIN_MAX_PAYLOAD / 2))
+#endif
+
+#if (MIN_MAX_PAYLOAD > 255)
+#error "MIN frame payloads can be no bigger than 255 bytes"
 #endif
 
 // Powers of two for FIFO management. Default is 16 frames in the FIFO, total of 1024 bytes for frame data
@@ -84,10 +107,6 @@
 
 #define TRANSPORT_FIFO_MAX_FRAMES (1U << TRANSPORT_FIFO_SIZE_FRAMES_BITS)
 #define TRANSPORT_FIFO_MAX_FRAME_DATA (1U << TRANSPORT_FIFO_SIZE_FRAME_DATA_BITS)
-
-#if (MAX_PAYLOAD > 255)
-#error "MIN frame payloads can be no bigger than 255 bytes"
-#endif
 
 // Indices into the frames FIFO are uint8_t and so can't have more than 256 frames in a FIFO
 #if (TRANSPORT_FIFO_MAX_FRAMES > 256)
@@ -143,7 +162,7 @@ struct min_context {
 #ifdef TRANSPORT_PROTOCOL
     struct transport_fifo transport_fifo; // T-MIN queue of outgoing frames
 #endif
-    uint8_t rx_frame_payload_buf[MAX_PAYLOAD]; // Payload received so far
+    uint8_t rx_frame_payload_buf[MIN_MAX_PAYLOAD]; // Payload received so far
     uint32_t rx_frame_checksum;                // Checksum received over the wire
     struct crc32_context rx_checksum;          // Calculated checksum for receiving frame
     struct crc32_context tx_checksum;          // Calculated checksum for sending frame

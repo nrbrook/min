@@ -9,7 +9,7 @@
 
 // Number of bytes needed for a frame with a given payload length, excluding stuff bytes
 // 3 header bytes, ID/control byte, length byte, seq byte, 4 byte CRC, EOF byte
-#define ON_WIRE_SIZE(p) ((p) + 11U)
+#define ON_WIRE_SIZE(p) ((p) + MIN_OVERHEAD)
 
 // Special protocol bytes
 enum {
@@ -504,11 +504,11 @@ static void rx_byte(struct min_context *self, uint8_t byte)
         crc32_step(&self->rx_checksum, byte);
         if (self->rx_frame_length > 0) {
             // Can reduce the RAM size by compiling limits to frame sizes
-            if (self->rx_frame_length <= MAX_PAYLOAD) {
+            if (self->rx_frame_length <= MIN_MAX_PAYLOAD) {
                 self->rx_frame_state = RECEIVING_PAYLOAD;
             } else {
                 // Frame dropped because it's longer than any frame we can buffer
-                min_debug_print("Dropping frame because length %d > MAX_PAYLOAD %d", self->rx_frame_length, MAX_PAYLOAD);
+                min_debug_print("Dropping frame because length %d > MIN_MAX_PAYLOAD %d", self->rx_frame_length, MIN_MAX_PAYLOAD);
                 self->rx_frame_state = SEARCHING_FOR_SOF;
             }
         } else {
