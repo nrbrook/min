@@ -793,11 +793,32 @@ class MINTransportSerial(MINTransport):
     def _serial_close(self):
         self._serial.close()
 
-    def __init__(self, port, baudrate=9600, loglevel=ERROR):
+    def __init__(
+        self,
+        port,
+        baudrate=9600,
+        window_size=8,
+        rx_window_size=16,
+        transport_fifo_size=100,
+        idle_timeout_ms=3000,
+        ack_retransmit_timeout_ms=25,
+        frame_retransmit_timeout_ms=50,
+        loglevel=ERROR,
+    ):
         """
         Open MIN connection on a given port.
         :param port: serial port
-        :param debug:
+        :param baudrate: baud rate
+        :param window_size: Number of outstanding unacknowledged frames
+                            permitted to send
+        :param rx_window_size: Number of outstanding unacknowledged frames
+                               that can be received
+        :param transport_fifo_size: Maximum number of outstanding frames to send
+        :param idle_timeout_ms: Time before connection assumed to have been lost and
+                                retransmissions stopped
+        :param ack_retransmit_timeout_ms: Time before ACK frames are resent
+        :param frame_retransmit_timeout_ms: Time before frames are resent
+        :param loglevel: set the logging desired
         """
         self.fake_errors = False
         try:
@@ -806,7 +827,13 @@ class MINTransportSerial(MINTransport):
             self._serial.reset_output_buffer()
         except SerialException:
             raise MINConnectionError(f"Transport MIN cannot open port '{port}'")
-        super().__init__(loglevel=loglevel)
+        super().__init__(window_size=window_size,
+                         rx_window_size=rx_window_size,
+                         transport_fifo_size=transport_fifo_size,
+                         idle_timeout_ms=idle_timeout_ms,
+                         ack_retransmit_timeout_ms=ack_retransmit_timeout_ms,
+                         frame_retransmit_timeout_ms=frame_retransmit_timeout_ms,
+                         loglevel=loglevel)
 
 
 class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
@@ -819,8 +846,42 @@ class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
     The application can send directly and pick up incoming frames from the queue.
     """
 
-    def __init__(self, port, baudrate=9600, loglevel=ERROR):
-        super().__init__(port=port, baudrate=baudrate, loglevel=loglevel)
+    def __init__(
+        self,
+        port,
+        baudrate=9600,
+        window_size=8,
+        rx_window_size=16,
+        transport_fifo_size=100,
+        idle_timeout_ms=3000,
+        ack_retransmit_timeout_ms=25,
+        frame_retransmit_timeout_ms=50,
+        loglevel=ERROR,
+    ):
+        """
+        Open MIN connection on a given port.
+        :param port: serial port
+        :param baudrate: baud rate
+        :param window_size: Number of outstanding unacknowledged frames
+                            permitted to send
+        :param rx_window_size: Number of outstanding unacknowledged frames
+                               that can be received
+        :param transport_fifo_size: Maximum number of outstanding frames to send
+        :param idle_timeout_ms: Time before connection assumed to have been lost and
+                                retransmissions stopped
+        :param ack_retransmit_timeout_ms: Time before ACK frames are resent
+        :param frame_retransmit_timeout_ms: Time before frames are resent
+        :param loglevel: set the logging desired
+        """
+        super().__init__(port=port,
+                         baudrate=baudrate,
+                         window_size=window_size,
+                         rx_window_size=rx_window_size,
+                         transport_fifo_size=transport_fifo_size,
+                         idle_timeout_ms=idle_timeout_ms,
+                         ack_retransmit_timeout_ms=ack_retransmit_timeout_ms,
+                         frame_retransmit_timeout_ms=frame_retransmit_timeout_ms,
+                         loglevel=loglevel)
         self._thread_lock = Lock()
 
     def close(self):
