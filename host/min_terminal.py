@@ -4,6 +4,7 @@ Supports both hex and string input modes.
 """
 import argparse
 from struct import unpack
+import sys
 from time import sleep
 import threading
 import logging
@@ -14,6 +15,44 @@ from min import ThreadsafeTransportMINSerialHandler
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
+
+
+# Module-level defaults for CLI arguments. Can be modified at runtime via
+# set_default_args() so that embedding applications can change
+# defaults without altering user-provided values.
+DEFAULT_BAUDRATE = 9600
+DEFAULT_MIN_ID = 0x01
+DEFAULT_HEX_MODE = False
+DEFAULT_LOG_LEVEL_NAME = "error"
+
+
+def set_default_args(
+    *,
+    baudrate: Optional[int] = None,
+    min_id: Optional[int] = None,
+    hex_mode: Optional[bool] = None,
+    log_level_name: Optional[str] = None,
+) -> None:
+    """Set module-level default CLI values used when arguments are omitted.
+
+    Args:
+        baudrate: Default baudrate for serial communication.
+        min_id: Default MIN ID to use for sending frames (0-63).
+        hex_mode: Default input mode for interactive terminal (True for hex).
+        log_level_name: Default log level name (debug, info, warning, error, critical).
+
+    Returns:
+        None
+    """
+    global DEFAULT_BAUDRATE, DEFAULT_MIN_ID, DEFAULT_HEX_MODE, DEFAULT_LOG_LEVEL_NAME
+    if baudrate is not None:
+        DEFAULT_BAUDRATE = baudrate
+    if min_id is not None:
+        DEFAULT_MIN_ID = min_id
+    if hex_mode is not None:
+        DEFAULT_HEX_MODE = hex_mode
+    if log_level_name is not None:
+        DEFAULT_LOG_LEVEL_NAME = log_level_name
 
 
 def bytes_to_int32(data: bytes, big_endian=True) -> int:
@@ -160,6 +199,8 @@ def get_available_ports() -> List[str]:
 def select_port(port: Optional[str] = None) -> str:
     """Select a serial port interactively if none specified.
 
+    If there is only one port, it will be returned directly.
+
     Args:
         port: Optional port name to use directly
 
@@ -175,6 +216,9 @@ def select_port(port: Optional[str] = None) -> str:
     ports = get_available_ports()
     if not ports:
         raise RuntimeError("No serial ports found")
+
+    if len(ports) == 1:
+        return ports[0]
 
     print("\nAvailable ports:")
     for i, port_name in enumerate(ports, 1):
@@ -205,7 +249,7 @@ def add_min_id_arg(parser):
     parser.add_argument(
         '--min-id',
         type=lambda x: int(x, 0),  # Allows for hex (0x01) or decimal input
-        default=0x01,
+        default=DEFAULT_MIN_ID,
         help='MIN ID to use when sending frames (default: 0x01)'
     )
 
@@ -214,7 +258,7 @@ def add_baudrate_arg(parser):
     parser.add_argument(
         '--baudrate',
         type=int,
-        default=9600,
+        default=DEFAULT_BAUDRATE,
         help='Baudrate for serial communication (default: 9600)'
     )
 
@@ -223,7 +267,7 @@ def add_log_level_arg(parser):
     parser.add_argument(
         '--log-level',
         type=str,
-        default="error",
+        default=DEFAULT_LOG_LEVEL_NAME,
         choices=log_levels_map.keys(),
         help='Set logging level: debug, info, warning, error, critical '
              '(default: error)'
@@ -231,11 +275,9 @@ def add_log_level_arg(parser):
 
 
 def add_hex_arg(parser):
-    parser.add_argument(
-        '--hex',
-        action='store_true',
-        help='Use hex input mode'
-    )
+    parser.add_argument('--hex', dest='hex', action='store_true', help='Use hex input mode')
+    parser.add_argument('--no-hex', dest='hex', action='store_false', help='Use string input mode')
+    parser.set_defaults(hex=DEFAULT_HEX_MODE)
 
 
 def parse_args(parser,add_port=True, add_log_level=True, add_hex=True, add_min_id=True, add_baudrate=True):
@@ -258,13 +300,13 @@ def parse_args(parser,add_port=True, add_log_level=True, add_hex=True, add_min_i
     if add_log_level:
         args.log_level = parse_log_level(args.log_level)
     if not add_hex:
-        args.hex = True
+        args.hex = DEFAULT_HEX_MODE if DEFAULT_HEX_MODE is not None else True
     if add_min_id:
         # Validate MIN ID range (0-63 as per the spec)
         if args.min_id not in range(64):
             parser.error("MIN ID must be in range 0-63")
     if not add_baudrate:
-        args.baudrate = 9600
+        args.baudrate = DEFAULT_BAUDRATE
 
     return args
 
@@ -272,7 +314,11 @@ def parse_args(parser,add_port=True, add_log_level=True, add_hex=True, add_min_i
 def main():
     """Run the MIN terminal."""
     parser = argparse.ArgumentParser(description="MIN terminal")
-    args = parse_args(parser=parser)
+    try:
+        args = parse_args(parser=parser)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     # Set up and connect MIN handler
     min_handler = setup_min_handler(
